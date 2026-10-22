@@ -1,0 +1,161 @@
+{% extends "base/base.html" %}
+
+{% block title %}AI Assistant — BoxIQ{% endblock %}
+{% block nav_ai %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/ai/ai.css">
+{% endblock %}
+
+{% block page_title %}AI Packaging Assistant{% endblock %}
+{% block page_subtitle %}Natural-language warehouse queries strictly orchestrated through Google Gemini and deterministic packaging tools{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+  <!-- AI Connection Status Header -->
+  <div class="ai-status-bar">
+    {% if gemini_active %}
+    <div class="status-pill active">
+      <span class="status-dot-mini green"></span>
+      <span><strong>Google Gemini Active</strong> ({{ model_name }}) — Connected to live warehouse database & 3D engine</span>
+    </div>
+    {% else %}
+    <div class="status-pill standby">
+      <span class="status-dot-mini amber"></span>
+      <span><strong>Deterministic Mode Active</strong> — Add your <code>GEMINI_API_KEY</code> in <code>.env</code> to activate Google Gemini AI.</span>
+    </div>
+    {% endif %}
+    <span style="font-size: 0.75rem; color: var(--text-muted);">Strict Tool Allowlist & DB Grounding</span>
+  </div>
+
+  <!-- Quick Database Query Suggestions -->
+  <div class="chat-suggestions">
+    <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center; font-weight: 600;">Database Queries:</span>
+    <button type="button" class="suggestion-chip" onclick="sendAIMessage('Which box should I use for order ORD-1001?')">📦 "Which box for ORD-1001?"</button>
+    <button type="button" class="suggestion-chip" onclick="sendAIMessage('Show details for order ORD-1002')">📋 "Show details for ORD-1002"</button>
+    <button type="button" class="suggestion-chip" onclick="sendAIMessage('What is the stock of box BX-102?')">📊 "Stock of BX-102?"</button>
+    <button type="button" class="suggestion-chip" onclick="sendAIMessage('List all available shipping boxes')">📦 "List all shipping boxes"</button>
+    <button type="button" class="suggestion-chip" onclick="sendAIMessage('Search products with speaker')">🔍 "Search products: speaker"</button>
+    <button type="button" class="suggestion-chip" onclick="sendAIMessage('Show recent packaging history')">📜 "Recent packing history"</button>
+  </div>
+
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-bubble assistant">
+      <div style="margin-bottom: 6px;">
+        {% if gemini_active %}
+        <span class="engine-badge gemini">✨ Google Gemini Active</span>
+        {% else %}
+        <span class="engine-badge deterministic">⚙ Deterministic Rule Engine</span>
+        {% endif %}
+      </div>
+      👋 Hello! I am the <strong>BoxIQ AI Assistant</strong>.
+      {% if gemini_active %}
+      I am connected to <strong>Google Gemini</strong> with access to query the live warehouse database (orders, shipping boxes, inventory stock, products) and calculate deterministic 3D box packing solutions.
+      {% else %}
+      I am running in <strong>Deterministic Rule Mode</strong>. You can configure your <code>GEMINI_API_KEY</code> in the <code>.env</code> file to enable conversational Gemini LLM queries.
+      {% endif %}
+      <br><br>
+      Ask me any packaging question, for example: <em>"Which box should I use for order ORD-1001?"</em> or <em>"List all shipping boxes in stock"</em>.
+    </div>
+  </div>
+
+  <form class="chat-input-area" id="chatForm" onsubmit="event.preventDefault(); handleChatSubmit();">
+    <input 
+      type="text" 
+      id="chatInput" 
+      class="chat-input" 
+      placeholder="Ask a question (e.g. Which box should I use for ORD-1001?)..."
+      autocomplete="off"
+      required
+    >
+    <button type="submit" class="chat-send-btn" id="chatSendBtn">Send</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function handleChatSubmit() {
+    const input = document.getElementById('chatInput');
+    const msg = input.value.trim();
+    if (msg) {
+      sendAIMessage(msg);
+      input.value = '';
+    }
+  }
+
+  function formatMarkdown(text) {
+    if (!text) return '';
+    // Escape basic HTML
+    let escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    // Bold **text**
+    escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Inline code `code`
+    escaped = escaped.replace(/`([^`]+)`/g, '<code style="background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; font-family: monospace;">$1</code>');
+    // Line breaks to <br>
+    escaped = escaped.replace(/\n/g, '<br>');
+    return escaped;
+  }
+
+  async function sendAIMessage(text) {
+    const chatMessages = document.getElementById('chatMessages');
+
+    // Append user bubble
+    const userBubble = document.createElement('div');
+    userBubble.className = 'chat-bubble user';
+    userBubble.innerText = text;
+    chatMessages.appendChild(userBubble);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    // Append thinking bubble
+    const assistantBubble = document.createElement('div');
+    assistantBubble.className = 'chat-bubble assistant';
+    assistantBubble.innerHTML = '<em>Searching database and computing deterministic packing verification...</em>';
+    chatMessages.appendChild(assistantBubble);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    try {
+      const res = await fetch('/api/chat/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+      });
+      const data = await res.json();
+
+      // Engine badge
+      const engineBadge = data.is_gemini_powered
+        ? `<span class="engine-badge gemini">✨ Google Gemini (${data.model || 'gemini-2.5-flash'})</span>`
+        : `<span class="engine-badge deterministic">⚙ Deterministic Rule Engine</span>`;
+
+      // Tool badges
+      let toolsHtml = '';
+      if (data.tool_calls && data.tool_calls.length > 0) {
+        toolsHtml = data.tool_calls.map(tc => 
+          `<span class="tool-badge">⚙ Tool: ${tc.tool} (${tc.status})</span>`
+        ).join(' ') + '<br>';
+      }
+
+      // Action link to view order in workstation if relevant
+      let actionBtnHtml = '';
+      if (data.verified_result && data.verified_result.order_number) {
+        const ord = data.verified_result.order_number;
+        actionBtnHtml = `<div style="margin-top: 12px;"><a href="/workstation/?order=${encodeURIComponent(ord)}" class="search-btn" style="display:inline-flex; padding: 6px 14px; font-size: 0.8rem; text-decoration: none;">View Order ${ord} in Workstation ➔</a></div>`;
+      }
+
+      const formattedReply = formatMarkdown(data.reply);
+      assistantBubble.innerHTML = `
+        <div style="margin-bottom: 6px;">${engineBadge}</div>
+        ${toolsHtml}
+        <div class="chat-bubble-content">${formattedReply}</div>
+        ${actionBtnHtml}
+      `;
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    } catch (err) {
+      assistantBubble.innerHTML = '<span style="color: var(--rose);">Error communicating with AI service.</span>';
+    }
+  }
+</script>
+{% endblock %}

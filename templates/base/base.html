@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}BoxIQ — Smart Shipping Box Recommendation System{% endblock %}</title>
+  <link rel="stylesheet" href="/static/base/base.css">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" role="navigation" aria-label="Main Navigation">
+    <a href="/workstation/" class="brand-header">
+      <div class="brand-icon" aria-hidden="true">📦</div>
+      <div>
+        <h1 class="brand-title">BoxIQ</h1>
+        <span class="brand-tag">Deterministic Engine</span>
+      </div>
+    </a>
+
+    <ul class="nav-menu">
+      <li>
+        <a href="/workstation/" class="nav-link {% block nav_workstation %}{% endblock %}" id="navWorkstation">
+          <span class="nav-icon">📦</span>
+          <span>Packing Workstation</span>
+        </a>
+      </li>
+      <li>
+        <a href="/orders/" class="nav-link {% block nav_orders %}{% endblock %}" id="navOrders">
+          <span class="nav-icon">📋</span>
+          <span>Orders Catalog</span>
+        </a>
+      </li>
+      <li>
+        <a href="/boxes/" class="nav-link {% block nav_boxes %}{% endblock %}" id="navBoxes">
+          <span class="nav-icon">📊</span>
+          <span>Boxes & Inventory</span>
+        </a>
+      </li>
+      <li>
+        <a href="/history/" class="nav-link {% block nav_history %}{% endblock %}" id="navHistory">
+          <span class="nav-icon">📜</span>
+          <span>Audit History</span>
+        </a>
+      </li>
+      <li>
+        <a href="/ai/" class="nav-link {% block nav_ai %}{% endblock %}" id="navAI">
+          <span class="nav-icon">🤖</span>
+          <span>AI Assistant</span>
+        </a>
+      </li>
+    </ul>
+
+    <div class="user-badge">
+      <div class="status-dot" title="Packaging Engine Online"></div>
+      <div>
+        <div class="user-name">Warehouse Operator</div>
+        <div class="user-role">Packing Station #4 (Active)</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="main-wrapper" role="main">
+    <header class="top-bar">
+      <div>
+        <h2 class="page-title">{% block page_title %}Packing Workstation{% endblock %}</h2>
+        <p class="page-subtitle">{% block page_subtitle %}Verified 3D physical arrangement, weight verification & cost-optimal box recommendation{% endblock %}</p>
+      </div>
+
+      <div class="top-actions">
+        {% block top_actions %}{% endblock %}
+      </div>
+    </header>
+
+    <div class="page-container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script>
+    // Universal Toast Utility
+    window.showToast = function(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `
+        <span>${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</span>
+        <span>${message}</span>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    };
+  </script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,126 @@
+{% extends "base/base.html" %}
+
+{% block title %}Audit History — BoxIQ{% endblock %}
+{% block nav_history %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/history/history.css">
+{% endblock %}
+
+{% block page_title %}Recommendation Audit History{% endblock %}
+{% block page_subtitle %}Immutable audit log of all deterministic box selection runs and candidate evaluations{% endblock %}
+
+{% block top_actions %}
+<button class="search-btn" onclick="fetchHistory()">
+  <span>↻ Refresh Log</span>
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="history-summary-grid">
+  <div class="history-stat-card">
+    <div class="history-stat-icon">📜</div>
+    <div>
+      <div class="history-stat-number" id="statTotalRuns">-</div>
+      <div class="history-stat-label">Total Evaluated Runs</div>
+    </div>
+  </div>
+
+  <div class="history-stat-card">
+    <div class="history-stat-icon" style="color: var(--emerald); background: rgba(16, 185, 129, 0.15);">✓</div>
+    <div>
+      <div class="history-stat-number" id="statSuccessfulRuns" style="color: var(--emerald);">-</div>
+      <div class="history-stat-label">Successful Recommendations</div>
+    </div>
+  </div>
+
+  <div class="history-stat-card">
+    <div class="history-stat-icon" style="color: var(--rose); background: rgba(244, 63, 94, 0.15);">✗</div>
+    <div>
+      <div class="history-stat-number" id="statNoFitRuns" style="color: var(--rose);">-</div>
+      <div class="history-stat-label">No-Fit Outcomes</div>
+    </div>
+  </div>
+</div>
+
+<div class="history-table-card">
+  <div class="card-header">
+    <h3 class="card-title">Recent Packaging Runs</h3>
+    <span class="badge badge-verified" id="historyCountTag">Loading...</span>
+  </div>
+
+  <table class="data-table" aria-label="Recommendation runs audit table">
+    <thead>
+      <tr>
+        <th>Run ID</th>
+        <th>Order Number</th>
+        <th>Result</th>
+        <th>Recommended Box</th>
+        <th>Algorithm Version</th>
+        <th>Requester</th>
+        <th>Boxes Evaluated</th>
+        <th>Timestamp</th>
+      </tr>
+    </thead>
+    <tbody id="historyTableBody">
+      <tr>
+        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">Loading audit runs...</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    fetchHistory();
+  });
+
+  async function fetchHistory() {
+    try {
+      const res = await fetch('/api/history/');
+      const data = await res.json();
+      const runs = data.runs || [];
+
+      const total = runs.length;
+      const success = runs.filter(r => r.is_successful).length;
+      const noFit = runs.filter(r => !r.is_successful).length;
+
+      document.getElementById('statTotalRuns').innerText = total;
+      document.getElementById('statSuccessfulRuns').innerText = success;
+      document.getElementById('statNoFitRuns').innerText = noFit;
+      document.getElementById('historyCountTag').innerText = `${total} Recorded Runs`;
+
+      const tbody = document.getElementById('historyTableBody');
+      tbody.innerHTML = '';
+
+      if (runs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No recommendation runs recorded yet.</td></tr>';
+        return;
+      }
+
+      runs.forEach(r => {
+        const tr = document.createElement('tr');
+        const resultBadge = r.is_successful 
+          ? `<span class="badge badge-assigned">✓ Box Selected</span>`
+          : `<span class="badge badge-fragile">✗ No Fit</span>`;
+
+        tr.innerHTML = `
+          <td><strong style="color: #FFFFFF;">#${r.id}</strong></td>
+          <td><a href="/workstation/?order=${encodeURIComponent(r.order_number)}" class="sku-text" style="text-decoration:none;">${r.order_number}</a></td>
+          <td>${resultBadge}</td>
+          <td><strong style="color: ${r.best_box ? 'var(--emerald)' : 'var(--text-muted)'};">${r.best_box || 'None'}</strong></td>
+          <td><span class="algo-tag">${r.algorithm_version}</span></td>
+          <td>${r.requester}</td>
+          <td>${r.candidates_count} boxes</td>
+          <td style="color: var(--text-muted); font-size: 0.8rem;">${r.created_at}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (err) {
+      window.showToast('Failed to load audit history.', 'error');
+    }
+  }
+</script>
+{% endblock %}

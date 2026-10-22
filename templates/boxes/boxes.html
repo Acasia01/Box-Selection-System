@@ -1,0 +1,363 @@
+{% extends "base/base.html" %}
+
+{% block title %}Boxes & Inventory — BoxIQ{% endblock %}
+{% block nav_boxes %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/boxes/boxes.css">
+{% endblock %}
+
+{% block page_title %}Shipping Boxes & Live Stock{% endblock %}
+{% block page_subtitle %}Authoritative physical box specifications, weight limits, and live warehouse inventory{% endblock %}
+
+{% block top_actions %}
+<div style="display: flex; align-items: center; gap: 10px;">
+  <button class="search-btn" onclick="openAddBoxModal()" id="addBoxBtn">
+    <span>+ Add Box</span>
+  </button>
+  <button class="btn-secondary" onclick="fetchBoxes()" id="refreshBoxesBtn">
+    <span>↻ Refresh Inventory</span>
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Inventory Metrics Summary -->
+<div class="boxes-stats-grid">
+  <div class="box-stat-card">
+    <div class="box-stat-icon">📦</div>
+    <div>
+      <div class="box-stat-number" id="statTotalBoxes">-</div>
+      <div class="box-stat-label">Box Specifications</div>
+    </div>
+  </div>
+
+  <div class="box-stat-card">
+    <div class="box-stat-icon" style="color: var(--emerald); background: rgba(16, 185, 129, 0.15);">✓</div>
+    <div>
+      <div class="box-stat-number" id="statActiveBoxes" style="color: var(--emerald);">-</div>
+      <div class="box-stat-label">Active Box Types</div>
+    </div>
+  </div>
+
+  <div class="box-stat-card">
+    <div class="box-stat-icon" style="color: #38BDF8; background: rgba(14, 165, 233, 0.15);">📊</div>
+    <div>
+      <div class="box-stat-number" id="statTotalStock">-</div>
+      <div class="box-stat-label">Available Boxes In Stock</div>
+    </div>
+  </div>
+
+  <div class="box-stat-card">
+    <div class="box-stat-icon" style="color: var(--amber); background: rgba(245, 158, 11, 0.15);">🔒</div>
+    <div>
+      <div class="box-stat-number" id="statReservedStock" style="color: var(--amber);">-</div>
+      <div class="box-stat-label">Reserved For Orders</div>
+    </div>
+  </div>
+</div>
+
+<!-- Table Card -->
+<div class="boxes-table-card">
+  <div class="card-header">
+    <h3 class="card-title">Box Catalog & Inventory Levels</h3>
+    <span class="badge badge-verified" id="boxCountTag">Loading...</span>
+  </div>
+
+  <table class="data-table" aria-label="Box specifications and inventory">
+    <thead>
+      <tr>
+        <th>Code</th>
+        <th>Box Name</th>
+        <th>Internal Dims (cm)</th>
+        <th>Volume (cm³)</th>
+        <th>Max Capacity</th>
+        <th>Empty Wt</th>
+        <th>Unit Cost</th>
+        <th>Available Stock</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="boxesTableBody">
+      <tr>
+        <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 30px;">Loading box specifications...</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Add / Edit Box Modal -->
+<div class="modal-overlay" id="boxModalOverlay" onclick="if(event.target === this) closeBoxModal();">
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="boxModalTitle">
+    <div class="modal-header">
+      <h3 class="modal-title" id="boxModalTitle">
+        <span>📦</span>
+        <span id="boxModalTitleText">Edit Box</span>
+      </h3>
+      <button type="button" class="modal-close-btn" onclick="closeBoxModal()" aria-label="Close modal">×</button>
+    </div>
+
+    <form id="boxForm" onsubmit="saveBox(event)">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="boxCodeInput">Box Code *</label>
+            <input type="text" id="boxCodeInput" class="form-input" placeholder="e.g. BX-106" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="boxNameInput">Box Name *</label>
+            <input type="text" id="boxNameInput" class="form-input" placeholder="e.g. Standard Large Box" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Internal Dimensions (cm) *</label>
+          <div class="form-row-3">
+            <div>
+              <input type="number" step="0.01" min="0.01" id="boxLengthInput" class="form-input" placeholder="Length" required>
+              <span style="font-size: 0.7rem; color: var(--text-muted);">Length (cm)</span>
+            </div>
+            <div>
+              <input type="number" step="0.01" min="0.01" id="boxWidthInput" class="form-input" placeholder="Width" required>
+              <span style="font-size: 0.7rem; color: var(--text-muted);">Width (cm)</span>
+            </div>
+            <div>
+              <input type="number" step="0.01" min="0.01" id="boxHeightInput" class="form-input" placeholder="Height" required>
+              <span style="font-size: 0.7rem; color: var(--text-muted);">Height (cm)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="boxMaxWeightInput">Max Packed Weight (kg) *</label>
+            <input type="number" step="0.001" min="0.001" id="boxMaxWeightInput" class="form-input" placeholder="e.g. 5.000" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="boxEmptyWeightInput">Empty Box Weight (kg) *</label>
+            <input type="number" step="0.001" min="0.000" id="boxEmptyWeightInput" class="form-input" placeholder="e.g. 0.250" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="boxCostInput">Cost per Unit *</label>
+            <input type="number" step="0.01" min="0.00" id="boxCostInput" class="form-input" placeholder="e.g. 18.00" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="boxCurrencyInput">Currency</label>
+            <select id="boxCurrencyInput" class="form-select">
+              <option value="INR">INR (₹)</option>
+              <option value="USD">USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="boxStockInput">Total Quantity on Hand (Units) *</label>
+            <input type="number" step="1" min="0" id="boxStockInput" class="form-input" placeholder="e.g. 50" required>
+          </div>
+          <div class="form-group" style="justify-content: center;">
+            <label class="form-label">Catalog Status</label>
+            <label style="display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
+              <input type="checkbox" id="boxIsActiveInput" checked style="width: 18px; height: 18px; accent-color: var(--primary);">
+              <span style="font-size: 0.9rem; color: #FFFFFF; font-weight: 500;">Active in Recommendation Engine</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeBoxModal()">Cancel</button>
+        <button type="submit" class="btn-primary" id="boxSubmitBtn">Save Box</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  let loadedBoxes = [];
+  let isEditing = false;
+  let editingBoxCode = '';
+
+  document.addEventListener('DOMContentLoaded', () => {
+    fetchBoxes();
+  });
+
+  async function fetchBoxes() {
+    try {
+      const res = await fetch('/api/boxes/');
+      const data = await res.json();
+      loadedBoxes = data.boxes || [];
+
+      // Metrics
+      const total = loadedBoxes.length;
+      const active = loadedBoxes.filter(b => b.is_active).length;
+      const totalAvail = loadedBoxes.reduce((acc, b) => acc + b.quantity_available, 0);
+      const totalRsv = loadedBoxes.reduce((acc, b) => acc + b.quantity_reserved, 0);
+
+      document.getElementById('statTotalBoxes').innerText = total;
+      document.getElementById('statActiveBoxes').innerText = active;
+      document.getElementById('statTotalStock').innerText = totalAvail;
+      document.getElementById('statReservedStock').innerText = totalRsv;
+      document.getElementById('boxCountTag').innerText = `${loadedBoxes.length} Box Models`;
+
+      const tbody = document.getElementById('boxesTableBody');
+      tbody.innerHTML = '';
+
+      loadedBoxes.forEach(b => {
+        const tr = document.createElement('tr');
+        const isStocked = b.quantity_available > 0;
+        const stockClass = isStocked ? 'stock-in' : 'stock-out';
+
+        tr.innerHTML = `
+          <td><strong class="sku-text" style="font-size: 1rem;">${b.code}</strong></td>
+          <td><strong style="color: #FFFFFF;">${b.name}</strong></td>
+          <td>${b.length} × ${b.width} × ${b.height} cm</td>
+          <td>${b.internal_volume.toLocaleString()} cm³</td>
+          <td><strong style="color: #FFFFFF;">${b.max_weight.toFixed(3)} kg</strong></td>
+          <td>${b.empty_weight.toFixed(3)} kg</td>
+          <td><strong style="color: #FFFFFF;">${b.currency} ${b.cost.toFixed(2)}</strong></td>
+          <td>
+            <div class="stock-pill ${stockClass}">
+              <span>${b.quantity_available} units</span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+              ${b.quantity_on_hand} on hand • ${b.quantity_reserved} reserved
+            </div>
+          </td>
+          <td>
+            <span class="badge ${b.is_active ? 'badge-verified' : 'badge-fragile'}">
+              ${b.is_active ? 'Active' : 'Discontinued'}
+            </span>
+          </td>
+          <td>
+            <button type="button" class="btn-edit" onclick="openEditBoxModal('${b.code}')">
+              <span>✏️</span>
+              <span>Edit</span>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (err) {
+      window.showToast('Failed to load box specifications.', 'error');
+    }
+  }
+
+  function openAddBoxModal() {
+    isEditing = false;
+    editingBoxCode = '';
+    document.getElementById('boxModalTitleText').innerText = 'Add New Shipping Box';
+    document.getElementById('boxSubmitBtn').innerText = 'Create Box';
+
+    const codeInput = document.getElementById('boxCodeInput');
+    codeInput.value = '';
+    codeInput.disabled = false;
+
+    document.getElementById('boxNameInput').value = '';
+    document.getElementById('boxLengthInput').value = '';
+    document.getElementById('boxWidthInput').value = '';
+    document.getElementById('boxHeightInput').value = '';
+    document.getElementById('boxMaxWeightInput').value = '';
+    document.getElementById('boxEmptyWeightInput').value = '0.200';
+    document.getElementById('boxCostInput').value = '';
+    document.getElementById('boxCurrencyInput').value = 'INR';
+    document.getElementById('boxStockInput').value = '50';
+    document.getElementById('boxIsActiveInput').checked = true;
+
+    document.getElementById('boxModalOverlay').classList.add('active');
+  }
+
+  function openEditBoxModal(code) {
+    const box = loadedBoxes.find(b => b.code === code);
+    if (!box) {
+      window.showToast(`Box ${code} not found.`, 'error');
+      return;
+    }
+
+    isEditing = true;
+    editingBoxCode = code;
+    document.getElementById('boxModalTitleText').innerText = `Edit Box: ${box.code}`;
+    document.getElementById('boxSubmitBtn').innerText = 'Save Changes';
+
+    const codeInput = document.getElementById('boxCodeInput');
+    codeInput.value = box.code;
+    codeInput.disabled = true;
+
+    document.getElementById('boxNameInput').value = box.name;
+    document.getElementById('boxLengthInput').value = box.length;
+    document.getElementById('boxWidthInput').value = box.width;
+    document.getElementById('boxHeightInput').value = box.height;
+    document.getElementById('boxMaxWeightInput').value = box.max_weight;
+    document.getElementById('boxEmptyWeightInput').value = box.empty_weight;
+    document.getElementById('boxCostInput').value = box.cost;
+    document.getElementById('boxCurrencyInput').value = box.currency || 'INR';
+    document.getElementById('boxStockInput').value = box.quantity_on_hand;
+    document.getElementById('boxIsActiveInput').checked = box.is_active;
+
+    document.getElementById('boxModalOverlay').classList.add('active');
+  }
+
+  function closeBoxModal() {
+    document.getElementById('boxModalOverlay').classList.remove('active');
+  }
+
+  async function saveBox(event) {
+    event.preventDefault();
+    const btn = document.getElementById('boxSubmitBtn');
+    btn.disabled = true;
+    btn.innerText = 'Saving...';
+
+    const payload = {
+      name: document.getElementById('boxNameInput').value.trim(),
+      length: parseFloat(document.getElementById('boxLengthInput').value),
+      width: parseFloat(document.getElementById('boxWidthInput').value),
+      height: parseFloat(document.getElementById('boxHeightInput').value),
+      max_weight: parseFloat(document.getElementById('boxMaxWeightInput').value),
+      empty_weight: parseFloat(document.getElementById('boxEmptyWeightInput').value),
+      cost: parseFloat(document.getElementById('boxCostInput').value),
+      currency: document.getElementById('boxCurrencyInput').value,
+      quantity_on_hand: parseInt(document.getElementById('boxStockInput').value, 10),
+      is_active: document.getElementById('boxIsActiveInput').checked,
+    };
+
+    let url = '';
+    if (isEditing) {
+      url = `/api/boxes/${encodeURIComponent(editingBoxCode)}/update/`;
+    } else {
+      payload.code = document.getElementById('boxCodeInput').value.trim().toUpperCase();
+      url = '/api/boxes/create/';
+    }
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      btn.disabled = false;
+      btn.innerText = isEditing ? 'Save Changes' : 'Create Box';
+
+      if (res.ok && data.success) {
+        window.showToast(data.message, 'success');
+        closeBoxModal();
+        fetchBoxes();
+      } else {
+        window.showToast(data.error || 'Failed to save box.', 'error');
+      }
+    } catch (err) {
+      btn.disabled = false;
+      btn.innerText = isEditing ? 'Save Changes' : 'Create Box';
+      window.showToast('Network error while saving box.', 'error');
+    }
+  }
+</script>
+{% endblock %}

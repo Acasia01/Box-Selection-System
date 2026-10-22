@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BoxIQ — Smart Shipping Box Recommendation System</title>
+  <link rel="stylesheet" href="/static/css/workstation.css">
+</head>
+
+<body>
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" role="navigation" aria-label="Main Navigation">
+    <a href="/workstation/" class="brand-header" style="text-decoration: none;">
+      <div class="brand-icon" aria-hidden="true">📦</div>
+      <div>
+        <h1 class="brand-title">BoxIQ</h1>
+        <span class="brand-tag">Deterministic Engine</span>
+      </div>
+    </a>
+
+    <ul class="nav-menu">
+      <li>
+        <a href="/workstation/" class="nav-link active" id="navWorkstation">
+          <span class="nav-icon">📦</span>
+          <span>Packing Workstation</span>
+        </a>
+      </li>
+      <li>
+        <a href="/orders/" class="nav-link" id="navOrders">
+          <span class="nav-icon">📋</span>
+          <span>Orders Catalog</span>
+        </a>
+      </li>
+      <li>
+        <a href="/boxes/" class="nav-link" id="navBoxes">
+          <span class="nav-icon">📊</span>
+          <span>Boxes & Inventory</span>
+        </a>
+      </li>
+      <li>
+        <a href="/history/" class="nav-link" id="navHistory">
+          <span class="nav-icon">📜</span>
+          <span>Audit History</span>
+        </a>
+      </li>
+      <li>
+        <a href="/ai/" class="nav-link" id="navAI">
+          <span class="nav-icon">🤖</span>
+          <span>AI Assistant</span>
+        </a>
+      </li>
+    </ul>
+
+    <div class="user-badge">
+      <div class="status-dot" title="Packaging Engine Online"></div>
+      <div>
+        <div class="user-name">Warehouse Operator</div>
+        <div class="user-role">Packing Station #4 (Active)</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="main-wrapper" role="main">
+    <!-- Top Action Bar -->
+    <header class="top-bar">
+      <div>
+        <h2 class="page-title" id="pageHeading">Packing Workstation</h2>
+        <p class="page-subtitle">Verified 3D physical arrangement, weight verification & cost-optimal box recommendation
+        </p>
+      </div>
+
+      <!-- Order Lookup Input -->
+      <form class="search-box-container" id="orderSearchForm"
+        onsubmit="event.preventDefault(); window.handleOrderSearch();">
+        <span aria-hidden="true">🔍</span>
+        <input type="text" id="orderInput" class="search-input" placeholder="Enter Order Number (e.g. ORD-1001)..."
+          autocomplete="off" aria-label="Order Number" required>
+        <button type="submit" class="search-btn" id="findBoxBtn">
+          <span>Find Box</span>
+          <span aria-hidden="true">↵</span>
+        </button>
+      </form>
+    </header>
+
+    <!-- Quick Order Selector Chips -->
+    <div class="quick-chips" aria-label="Sample Orders">
+      <span class="chip-label">Quick Load Orders:</span>
+      <button type="button" class="order-chip" onclick="window.loadOrder('ORD-1001')">ORD-1001 (2x Speaker)</button>
+      <button type="button" class="order-chip" onclick="window.loadOrder('ORD-1002')">ORD-1002 (Book +
+        Headphones)</button>
+      <button type="button" class="order-chip" onclick="window.loadOrder('ORD-1003')">ORD-1003 (Laptop 14")</button>
+      <button type="button" class="order-chip" onclick="window.loadOrder('ORD-1004')">ORD-1004 (2x Mug + 2x
+        Shirt)</button>
+      <button type="button" class="order-chip" onclick="window.loadOrder('ORD-EMPTY')">ORD-EMPTY (Edge Case)</button>
+      <button type="button" class="order-chip" onclick="window.loadOrder('ORD-CANCELLED')">ORD-CANCELLED (Edge
+        Case)</button>
+    </div>
+
+    <!-- TAB 1: Packing Workstation -->
+    <section class="tab-content active" id="tab-workstation" aria-labelledby="navWorkstation">
+      <!-- Loading State -->
+      <div id="loadingIndicator" style="display: none; padding: 40px; text-align: center;">
+        <div style="font-size: 2rem; margin-bottom: 12px; animation: spin 1s linear infinite;">⏳</div>
+        <p style="color: var(--text-secondary);">Calculating 3D orientations, clearance & cost-optimal box...</p>
+      </div>
+
+      <!-- No Fit State Banner -->
+      <div id="noFitBanner" class="nofit-banner" style="display: none; margin-bottom: 24px;">
+        <div class="nofit-icon">⚠️</div>
+        <h3 class="nofit-title">No Eligible Box Available</h3>
+        <p class="nofit-desc" id="noFitReasonsText">No candidate shipping box satisfies the physical fit, weight, or
+          inventory stock constraints for this order.</p>
+      </div>
+
+      <!-- Main Workstation Grid -->
+      <div class="workstation-grid" id="workstationContent">
+        <!-- Left Column: Order Summary & 3D Arrangement -->
+        <div class="column-left">
+          <!-- Order Information Card -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <span>📋 Order Details</span>
+                <span id="currentOrderNumber" style="color: #38BDF8; font-family: var(--font-mono);">ORD-1001</span>
+              </div>
+              <div id="orderStatusBadge" class="badge badge-pending">Pending Packing</div>
+            </div>
+
+            <div
+              style="display: flex; gap: 24px; margin-bottom: 16px; font-size: 0.85rem; color: var(--text-secondary);">
+              <div>Customer: <strong id="orderCustomerName" style="color: #FFFFFF;">Rajesh Kumar</strong></div>
+              <div>Total Quantity: <strong id="orderTotalQty" style="color: #FFFFFF;">2 units</strong></div>
+              <div>Net Weight: <strong id="orderNetWeight" style="color: #FFFFFF;">2.400 kg</strong></div>
+            </div>
+
+            <!-- Line Items Table -->
+            <table class="data-table" aria-label="Order line items">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Dimensions (cm)</th>
+                  <th>Unit Wt</th>
+                  <th>Clearance</th>
+                  <th>Qty</th>
+                </tr>
+              </thead>
+              <tbody id="lineItemsTableBody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+
+            <!-- 3D Packing Visualization Canvas -->
+            <div class="visualizer-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div
+                  style="font-weight: 700; font-size: 0.9rem; color: #FFFFFF; display: flex; align-items: center; gap: 6px;">
+                  <span>📐 3D Physical Placement Projection</span>
+                  <span class="badge badge-verified" style="font-size: 0.7rem;">Verified No Overlaps</span>
+                </div>
+                <span id="boxInternalDimTag"
+                  style="font-size: 0.75rem; color: var(--emerald); font-family: var(--font-mono);">Box: 30 × 25 × 20
+                  cm</span>
+              </div>
+
+              <div class="canvas-container">
+                <canvas id="packingCanvas" width="600" height="300"></canvas>
+              </div>
+
+              <div class="canvas-legend" id="canvasLegend">
+                <!-- Generated dynamically with item colors -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Recommendation, Alternatives, Rejection Analysis -->
+        <div class="column-right">
+          <!-- Primary Recommended Box Card -->
+          <div class="card recommended-hero-card" id="recommendedBoxCard">
+            <div class="hero-box-header">
+              <div>
+                <span class="badge badge-assigned" style="margin-bottom: 6px;">★ RECOMMENDED BOX (RANK #1)</span>
+                <h3 class="box-code-title" id="recBoxCode">BX-102</h3>
+                <div class="box-name-subtitle" id="recBoxName">Medium Shipping Box</div>
+              </div>
+              <div class="price-tag" id="recBoxPrice">₹18.00</div>
+            </div>
+
+            <!-- 4 Metrics Grid -->
+            <div class="metrics-grid">
+              <div class="metric-box">
+                <div class="metric-label">Internal Dimensions</div>
+                <div class="metric-value" id="recBoxDims">30 × 25 × 20 cm</div>
+                <div class="metric-sub" id="recBoxVol">Volume: 15,000 cm³</div>
+              </div>
+
+              <div class="metric-box">
+                <div class="metric-label">Total Packed Weight</div>
+                <div class="metric-value" id="recBoxWeight">2.700 kg</div>
+                <div class="metric-sub" id="recBoxMaxWeight">Max Capacity: 5.000 kg</div>
+                <div class="progress-bar">
+                  <div class="progress-fill" id="weightProgressFill" style="width: 54%;"></div>
+                </div>
+              </div>
+
+              <div class="metric-box">
+                <div class="metric-label">Volume Utilization</div>
+                <div class="metric-value" id="recVolumePercent">30% Used</div>
+                <div class="metric-sub" id="recUnusedVol">Unused: 10,512 cm³</div>
+                <div class="progress-bar">
+                  <div class="progress-fill" id="volProgressFill" style="width: 30%; background: #38BDF8;"></div>
+                </div>
+              </div>
+
+              <div class="metric-box">
+                <div class="metric-label">Live Inventory</div>
+                <div class="metric-value" id="recStockAvailable" style="color: var(--emerald);">88 Available</div>
+                <div class="metric-sub" id="recStockBreakdown">100 on hand, 12 reserved</div>
+              </div>
+            </div>
+
+            <!-- Reason / Explanation Banner -->
+            <div class="explanation-banner" id="recExplanationText">
+              BX-102 is recommended because it passes physical fit and weight checks, has stock available (88 units),
+              and is the lowest-cost eligible box (₹18.00).
+            </div>
+
+            <!-- Action Button: Explicit Reservation -->
+            <button type="button" class="action-reserve-btn" id="reserveBoxActionBtn"
+              onclick="window.reserveSelectedBox()">
+              <span>🔒 Reserve Box & Assign to Order</span>
+            </button>
+          </div>
+
+          <!-- Eligible Alternatives Card -->
+          <div class="card" id="alternativesCard">
+            <div class="card-header">
+              <div class="card-title">
+                <span>🔄 Eligible Alternatives</span>
+              </div>
+              <span class="badge badge-verified" id="altCountBadge">2 Options</span>
+            </div>
+
+            <div class="alternatives-container" id="alternativesList">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Rejected Candidates Breakdown -->
+          <div class="card" id="rejectedAnalysisCard">
+            <button type="button" class="accordion-toggle" onclick="window.toggleRejectedAccordion()"
+              aria-expanded="false" id="rejectedAccordionBtn">
+              <span>⚠️ Ineligible Boxes & Rejection Reasons (<span id="rejectedCountTag">3</span>)</span>
+              <span id="rejectedAccordionChevron">▼</span>
+            </button>
+            <div class="accordion-body" id="rejectedAccordionBody" style="display: none;">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: Orders Catalog -->
+    <section class="tab-content" id="tab-orders" aria-labelledby="navOrders">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">📋 Active Warehouse Orders</h3>
+          <div style="display: flex; gap: 10px;">
+            <a href="/orders/" class="search-btn">+ Add Order</a>
+            <button class="search-btn"
+              style="background: rgba(255,255,255,0.08); border: 1px solid var(--border-subtle);"
+              onclick="window.fetchOrdersList()">↻ Refresh Orders</button>
+          </div>
+        </div>
+        <table class="data-table" aria-label="Orders catalog">
+          <thead>
+            <tr>
+              <th>Order #</th>
+              <th>Customer</th>
+              <th>Status</th>
+              <th>Total Items</th>
+              <th>Weight</th>
+              <th>Assigned Box</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="ordersCatalogBody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 3: Boxes & Inventory -->
+    <section class="tab-content" id="tab-boxes" aria-labelledby="navBoxes">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">📊 Shipping Box Specifications & Live Stock</h3>
+          <div style="display: flex; gap: 10px;">
+            <a href="/boxes/" class="search-btn">+ Add Box</a>
+            <button class="search-btn"
+              style="background: rgba(255,255,255,0.08); border: 1px solid var(--border-subtle);"
+              onclick="window.fetchBoxesList()">↻ Refresh Inventory</button>
+          </div>
+        </div>
+        <table class="data-table" aria-label="Box Specifications">
+          <thead>
+            <tr>
+              <th>Box Code</th>
+              <th>Name</th>
+              <th>Dimensions (cm)</th>
+              <th>Volume</th>
+              <th>Max Wt</th>
+              <th>Cost</th>
+              <th>Available Stock</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="boxesCatalogBody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 4: Audit History -->
+    <section class="tab-content" id="tab-history" aria-labelledby="navHistory">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">📜 Recommendation Audit & Traceability Log</h3>
+          <button class="search-btn" onclick="window.fetchHistoryList()">↻ Refresh History</button>
+        </div>
+        <table class="data-table" aria-label="Audit Log">
+          <thead>
+            <tr>
+              <th>Run ID</th>
+              <th>Order #</th>
+              <th>Result</th>
+              <th>Best Box</th>
+              <th>Algorithm Version</th>
+              <th>Requester</th>
+              <th>Evaluated Boxes</th>
+              <th>Timestamp</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 5: AI Assistant -->
+    <section class="tab-content" id="tab-ai" aria-labelledby="navAI">
+      <div class="chat-container">
+        <div class="chat-suggestions">
+          <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center;">Try Asking:</span>
+          <button type="button" class="suggestion-chip"
+            onclick="window.sendAIMessage('Which box should I use for order ORD-1001?')">"Which box for
+            ORD-1001?"</button>
+          <button type="button" class="suggestion-chip"
+            onclick="window.sendAIMessage('Show details for order ORD-1002')">"Show details for ORD-1002"</button>
+          <button type="button" class="suggestion-chip"
+            onclick="window.sendAIMessage('What is the stock of box BX-102?')">"Stock of BX-102?"</button>
+          <button type="button" class="suggestion-chip"
+            onclick="window.sendAIMessage('Find box for order ORD-1004')">"Find box for ORD-1004"</button>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-bubble assistant">
+            👋 Hello! I am the <strong>BoxIQ AI Assistant</strong>. Ask me for box recommendations, order summaries, or
+            live box inventory. All packaging calculations are verified deterministically by the 3D packing engine
+            before I respond.
+          </div>
+        </div>
+
+        <form class="chat-input-area" id="chatForm" onsubmit="event.preventDefault(); window.handleChatSubmit();">
+          <input type="text" id="chatInput" class="chat-input"
+            placeholder="Ask a question (e.g. Which box should I use for ORD-1001?)..." autocomplete="off" required>
+          <button type="submit" class="chat-send-btn" id="chatSendBtn">Send</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <!-- Workstation Client Logic -->
+  <script src="/static/js/workstation.js"></script>
+</body>
+
+</html>

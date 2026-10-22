@@ -1,0 +1,408 @@
+{% extends "base/base.html" %}
+
+{% block title %}Orders Catalog — BoxIQ{% endblock %}
+{% block nav_orders %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/order/order.css">
+{% endblock %}
+
+{% block page_title %}Orders Catalog{% endblock %}
+{% block page_subtitle %}Live ecommerce orders pending warehouse packaging and box assignment{% endblock %}
+
+{% block top_actions %}
+<div style="display: flex; align-items: center; gap: 10px;">
+  <button class="search-btn" onclick="openAddOrderModal()" id="addOrderBtn">
+    <span>+ Add Order</span>
+  </button>
+  <button class="btn-secondary" onclick="fetchOrders()" id="refreshOrdersBtn">
+    <span>↻ Refresh Orders</span>
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Metrics Summary -->
+<div class="orders-stats-grid">
+  <div class="order-stat-card">
+    <div class="order-stat-icon stat-icon-total">📋</div>
+    <div>
+      <div class="order-stat-number" id="statTotalOrders">-</div>
+      <div class="order-stat-label">Total Warehouse Orders</div>
+    </div>
+  </div>
+
+  <div class="order-stat-card">
+    <div class="order-stat-icon stat-icon-pending">⏳</div>
+    <div>
+      <div class="order-stat-number" id="statPendingOrders" style="color: var(--amber);">-</div>
+      <div class="order-stat-label">Pending Packing</div>
+    </div>
+  </div>
+
+  <div class="order-stat-card">
+    <div class="order-stat-icon stat-icon-assigned">✓</div>
+    <div>
+      <div class="order-stat-number" id="statAssignedOrders" style="color: var(--emerald);">-</div>
+      <div class="order-stat-label">Box Assigned & Reserved</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters Bar -->
+<div class="orders-filter-bar">
+  <div class="filter-input-wrap">
+    <span>🔍</span>
+    <input type="text" id="orderSearchInput" placeholder="Filter by order # or customer..." oninput="filterOrders()">
+  </div>
+
+  <div class="status-filter-pills">
+    <button class="filter-pill active" data-filter="ALL" onclick="setStatusFilter('ALL', this)">All</button>
+    <button class="filter-pill" data-filter="PENDING" onclick="setStatusFilter('PENDING', this)">Pending Packing</button>
+    <button class="filter-pill" data-filter="ASSIGNED" onclick="setStatusFilter('ASSIGNED', this)">Assigned</button>
+    <button class="filter-pill" data-filter="CANCELLED" onclick="setStatusFilter('CANCELLED', this)">Cancelled</button>
+  </div>
+</div>
+
+<!-- Orders Table Card -->
+<div class="orders-table-card">
+  <div class="card-header">
+    <h3 class="card-title">Warehouse Orders List</h3>
+    <span class="badge badge-verified" id="orderCountTag">Loading...</span>
+  </div>
+
+  <table class="data-table" aria-label="Orders catalog">
+    <thead>
+      <tr>
+        <th>Order Number</th>
+        <th>Customer Name</th>
+        <th>Status</th>
+        <th>Items Summary</th>
+        <th>Total Wt (kg)</th>
+        <th>Assigned Box</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="ordersTableBody">
+      <tr>
+        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Loading orders from database...</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Add / Edit Order Modal -->
+<div class="modal-overlay" id="orderModalOverlay" onclick="if(event.target === this) closeOrderModal();">
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
+    <div class="modal-header">
+      <h3 class="modal-title" id="orderModalTitle">
+        <span>📋</span>
+        <span id="orderModalTitleText">Edit Order</span>
+      </h3>
+      <button type="button" class="modal-close-btn" onclick="closeOrderModal()" aria-label="Close modal">×</button>
+    </div>
+
+    <form id="orderForm" onsubmit="saveOrder(event)">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="orderNumberInput">Order Number *</label>
+            <input type="text" id="orderNumberInput" class="form-input" placeholder="e.g. ORD-1005" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="customerNameInput">Customer Name</label>
+            <input type="text" id="customerNameInput" class="form-input" placeholder="e.g. Ramesh Patel">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="orderStatusInput">Order Status</label>
+          <select id="orderStatusInput" class="form-select">
+            <option value="PENDING">Pending Packing</option>
+            <option value="PACKED">Packed</option>
+            <option value="SHIPPED">Shipped</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </div>
+
+        <!-- Dynamic Order Items Section -->
+        <div style="border-top: 1px solid var(--border-subtle); padding-top: 16px; margin-top: 4px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <label class="form-label" style="margin: 0;">Order Line Items (Products)</label>
+            <button type="button" class="btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="addOrderItemRow()">
+              + Add Product
+            </button>
+          </div>
+          <div id="orderItemsContainer" style="display: flex; flex-direction: column; gap: 10px;">
+            <!-- Dynamically populated line item rows -->
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeOrderModal()">Cancel</button>
+        <button type="submit" class="btn-primary" id="orderSubmitBtn">Save Order</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  let allOrders = [];
+  let availableProducts = [];
+  let currentFilter = 'ALL';
+  let isEditingOrder = false;
+  let editingOrderNum = '';
+
+  document.addEventListener('DOMContentLoaded', () => {
+    fetchOrders();
+    fetchCatalogProducts();
+  });
+
+  async function fetchCatalogProducts() {
+    try {
+      const res = await fetch('/api/products/');
+      const data = await res.json();
+      availableProducts = data.products || [];
+    } catch (err) {
+      console.error('Failed to load products list', err);
+    }
+  }
+
+  async function fetchOrders() {
+    try {
+      const res = await fetch('/api/orders/');
+      const data = await res.json();
+      allOrders = data.orders || [];
+
+      // Update statistics
+      const total = allOrders.length;
+      const pending = allOrders.filter(o => o.status === 'PENDING' && !o.is_assigned).length;
+      const assigned = allOrders.filter(o => o.is_assigned).length;
+
+      document.getElementById('statTotalOrders').innerText = total;
+      document.getElementById('statPendingOrders').innerText = pending;
+      document.getElementById('statAssignedOrders').innerText = assigned;
+
+      renderOrders();
+    } catch (err) {
+      window.showToast('Failed to load orders from database.', 'error');
+    }
+  }
+
+  function setStatusFilter(filter, btn) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    renderOrders();
+  }
+
+  function filterOrders() {
+    renderOrders();
+  }
+
+  function renderOrders() {
+    const searchVal = document.getElementById('orderSearchInput').value.toLowerCase().trim();
+    const tbody = document.getElementById('ordersTableBody');
+
+    const filtered = allOrders.filter(o => {
+      const matchesSearch = o.order_number.toLowerCase().includes(searchVal) ||
+                            (o.customer_name && o.customer_name.toLowerCase().includes(searchVal));
+      if (!matchesSearch) return false;
+
+      if (currentFilter === 'ALL') return true;
+      if (currentFilter === 'PENDING') return o.status === 'PENDING' && !o.is_assigned;
+      if (currentFilter === 'ASSIGNED') return o.is_assigned;
+      if (currentFilter === 'CANCELLED') return o.status === 'CANCELLED';
+      return true;
+    });
+
+    document.getElementById('orderCountTag').innerText = `${filtered.length} of ${allOrders.length} Orders`;
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">No matching orders found.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = '';
+    filtered.forEach(o => {
+      const tr = document.createElement('tr');
+      const itemsPreview = o.items.map(it => 
+        `<span class="items-preview-tag">${it.quantity}x ${it.sku}</span>`
+      ).join('');
+
+      const assignedBadge = o.is_assigned 
+        ? `<span class="badge badge-assigned">✓ ${o.assigned_box}</span>`
+        : `<span style="color: var(--text-muted); font-size: 0.8rem;">Unassigned</span>`;
+
+      tr.innerHTML = `
+        <td><strong class="sku-text" style="font-size: 1rem;">${o.order_number}</strong></td>
+        <td><span style="color: #FFFFFF; font-weight: 500;">${o.customer_name || 'Customer'}</span></td>
+        <td><span class="badge ${o.is_assigned ? 'badge-assigned' : (o.status === 'CANCELLED' ? 'badge-fragile' : 'badge-pending')}">${o.status_display}</span></td>
+        <td>
+          <div style="font-size: 0.8rem; font-weight: 600; color: #FFFFFF; margin-bottom: 2px;">${o.items_count} units</div>
+          <div>${itemsPreview}</div>
+        </td>
+        <td><strong style="color: #FFFFFF;">${o.total_weight.toFixed(3)} kg</strong></td>
+        <td>${assignedBadge}</td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" class="btn-edit" onclick="openEditOrderModal('${o.order_number}')">
+              <span>✏️</span>
+              <span>Edit</span>
+            </button>
+            <a href="/workstation/?order=${encodeURIComponent(o.order_number)}" class="action-pack-btn">
+              <span>Pack</span>
+              <span>➔</span>
+            </a>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function openAddOrderModal() {
+    isEditingOrder = false;
+    editingOrderNum = '';
+    document.getElementById('orderModalTitleText').innerText = 'Add New Customer Order';
+    document.getElementById('orderSubmitBtn').innerText = 'Create Order';
+
+    const numInput = document.getElementById('orderNumberInput');
+    numInput.value = '';
+    numInput.disabled = false;
+
+    document.getElementById('customerNameInput').value = '';
+    document.getElementById('orderStatusInput').value = 'PENDING';
+
+    const container = document.getElementById('orderItemsContainer');
+    container.innerHTML = '';
+    // Add one default item row
+    addOrderItemRow();
+
+    document.getElementById('orderModalOverlay').classList.add('active');
+  }
+
+  function openEditOrderModal(orderNumber) {
+    const order = allOrders.find(o => o.order_number === orderNumber);
+    if (!order) {
+      window.showToast(`Order ${orderNumber} not found.`, 'error');
+      return;
+    }
+
+    isEditingOrder = true;
+    editingOrderNum = orderNumber;
+    document.getElementById('orderModalTitleText').innerText = `Edit Order: ${order.order_number}`;
+    document.getElementById('orderSubmitBtn').innerText = 'Save Changes';
+
+    const numInput = document.getElementById('orderNumberInput');
+    numInput.value = order.order_number;
+    numInput.disabled = true;
+
+    document.getElementById('customerNameInput').value = order.customer_name || '';
+    document.getElementById('orderStatusInput').value = order.status || 'PENDING';
+
+    const container = document.getElementById('orderItemsContainer');
+    container.innerHTML = '';
+
+    if (order.items && order.items.length > 0) {
+      order.items.forEach(it => {
+        addOrderItemRow(it.sku, it.quantity);
+      });
+    } else {
+      addOrderItemRow();
+    }
+
+    document.getElementById('orderModalOverlay').classList.add('active');
+  }
+
+  function closeOrderModal() {
+    document.getElementById('orderModalOverlay').classList.remove('active');
+  }
+
+  function addOrderItemRow(selectedSku = '', quantity = 1) {
+    const container = document.getElementById('orderItemsContainer');
+    const row = document.createElement('div');
+    row.className = 'order-item-row';
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = '2.2fr 1fr auto';
+    row.style.gap = '8px';
+    row.style.alignItems = 'center';
+
+    let optionsHtml = '<option value="">Select Product...</option>';
+    availableProducts.forEach(p => {
+      const isSel = p.sku === selectedSku ? 'selected' : '';
+      optionsHtml += `<option value="${p.sku}" ${isSel}>${p.sku} — ${p.name} (${p.length}x${p.width}x${p.height} cm)</option>`;
+    });
+
+    row.innerHTML = `
+      <select class="form-select item-sku-select" required>
+        ${optionsHtml}
+      </select>
+      <input type="number" min="1" step="1" class="form-input item-qty-input" value="${quantity}" placeholder="Qty" required>
+      <button type="button" class="btn-secondary" style="padding: 10px 12px; color: var(--rose);" onclick="this.closest('.order-item-row').remove();" title="Remove line">
+        ✕
+      </button>
+    `;
+    container.appendChild(row);
+  }
+
+  async function saveOrder(event) {
+    event.preventDefault();
+    const btn = document.getElementById('orderSubmitBtn');
+    btn.disabled = true;
+    btn.innerText = 'Saving...';
+
+    // Collect line items
+    const rows = document.querySelectorAll('.order-item-row');
+    const items = [];
+    rows.forEach(r => {
+      const sku = r.querySelector('.item-sku-select').value;
+      const qty = parseInt(r.querySelector('.item-qty-input').value, 10);
+      if (sku && qty > 0) {
+        items.push({ sku: sku, quantity: qty });
+      }
+    });
+
+    const payload = {
+      customer_name: document.getElementById('customerNameInput').value.trim(),
+      status: document.getElementById('orderStatusInput').value,
+      items: items,
+    };
+
+    let url = '';
+    if (isEditingOrder) {
+      url = `/api/orders/${encodeURIComponent(editingOrderNum)}/update/`;
+    } else {
+      payload.order_number = document.getElementById('orderNumberInput').value.trim().toUpperCase();
+      url = '/api/orders/create/';
+    }
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      btn.disabled = false;
+      btn.innerText = isEditingOrder ? 'Save Changes' : 'Create Order';
+
+      if (res.ok && data.success) {
+        window.showToast(data.message, 'success');
+        closeOrderModal();
+        fetchOrders();
+      } else {
+        window.showToast(data.error || 'Failed to save order.', 'error');
+      }
+    } catch (err) {
+      btn.disabled = false;
+      btn.innerText = isEditingOrder ? 'Save Changes' : 'Create Order';
+      window.showToast('Network error while saving order.', 'error');
+    }
+  }
+</script>
+{% endblock %}
